@@ -41,16 +41,16 @@ app.get("/", (request, response) => {
 	response.render("welcome", {portNumber : portNumber});
 });
 
-// 
+// Processes the actual translations
 app.get("/translate", async (request, response) => {
 	let currentUser = request.query.username || "";
-	console.log("username insert:" + currentUser);
+	console.log(`Inserting ${currentUser} into database`);
 
-	let original = request.query.lang1Text || "";
+	let originalText = request.query.lang1Text || "";
 	let translation = "";
-	let lang = request.query.lang2 || "";
+	let targetLang = request.query.lang2 || "";
 
-	if (original !== ""){
+	if (originalText !== ""){
 		const options = {
 			method: 'POST',
 			headers: {
@@ -58,24 +58,14 @@ app.get("/translate", async (request, response) => {
 				'X-RapidAPI-Key': '42e2f88aa4msh9b9e63c519efcd4p1e7f5bjsn71acb1cbaca4',
 				'X-RapidAPI-Host': 'microsoft-translator-text.p.rapidapi.com'
 			},
-			body: `[{"Text":"${original}"}]`
+			body: `[{"Text":"${originalText}"}]`
 		};
 		
-		fetch(`https://microsoft-translator-text.p.rapidapi.com/translate?to%5B0%5D=${lang}&api-version=3.0&profanityAction=NoAction&textType=plain`, options)
+		fetch(`https://microsoft-translator-text.p.rapidapi.com/translate?to%5B0%5D=${targetLang}&api-version=3.0&profanityAction=NoAction&textType=plain`, options)
 		.then(response => response.json())
 		.then(async res => {
 			let resJSON = res[0]
 			translation = resJSON.translations[0].text
-			// adding the translation to the history of the user
-			const options2 = {
-				method: 'POST',
-				headers: {
-					'content-type': 'application/json',
-					'X-RapidAPI-Key': '42e2f88aa4msh9b9e63c519efcd4p1e7f5bjsn71acb1cbaca4',
-					'X-RapidAPI-Host': 'microsoft-translator-text.p.rapidapi.com'
-				},
-				body: `[{"Text":"${original}"}]`
-			};
 	
 			let lang1 = ""
 	
@@ -88,7 +78,7 @@ app.get("/translate", async (request, response) => {
 	
 			console.log(translation + " " + lang1)
 	
-			await insertTrans(client, databaseAndCollection, currentUser, {lang1: lang1, original: original, lang2: lang, translation: translation});
+			await insertTrans(client, databaseAndCollection, currentUser, {lang1: lang1, original: original, lang2: targetLang, translation: translation});
 	
 			console.log(translation)
 			response.render("translator", {portNumber:portNumber, username:currentUser, original:original, translation:translation});
@@ -101,7 +91,7 @@ app.get("/translate", async (request, response) => {
 	}
 });
 
-app.post("/translate", async (request, response)=>{
+app.post("/translate", async (request, response) => {
 	let {username, password, original} = request.body;
 	let currentUser = username || currentUser;
 	let translation = "";
