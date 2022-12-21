@@ -50,6 +50,7 @@ app.get("/translate", async (request, response) => {
 	let translation = "";
 	let targetLang = request.query.lang2 || "";
 
+	// Translate text
 	if (originalText !== ""){
 		const options = {
 			method: 'POST',
@@ -61,38 +62,40 @@ app.get("/translate", async (request, response) => {
 			body: `[{"Text":"${originalText}"}]`
 		};
 		
+		// Uses the fetch API to process translation through Microsoft Translate API
 		fetch(`https://microsoft-translator-text.p.rapidapi.com/translate?to%5B0%5D=${targetLang}&api-version=3.0&profanityAction=NoAction&textType=plain`, options)
 		.then(response => response.json())
-		.then(async res => {
-			let resJSON = res[0]
-			translation = resJSON.translations[0].text
+		.then(async result => {
+			console.log(res)
+			let resultJSON = res[0];
+			translation = resultJSON.translations[0].text;
 	
 			let lang1 = ""
 	
 			// Detects the language of the original text
 			const url = 'https://microsoft-translator-text.p.rapidapi.com/Detect?api-version=3.0';
 			await fetch(url, options)
-				.then(res => res.json())
+				.then(result => result.json())
 				.then(json => {lang1 = json[0].language})
 				.catch(err => console.error('error:' + err));
 	
 			console.log(translation + " " + lang1)
 	
-			await insertTrans(client, databaseAndCollection, currentUser, {lang1: lang1, original: original, lang2: targetLang, translation: translation});
+			await insertTrans(client, databaseAndCollection, currentUser, {lang1: lang1, originalText : originalText, lang2: targetLang, translation: translation});
 	
 			console.log(translation)
-			response.render("translator", {portNumber:portNumber, username:currentUser, original:original, translation:translation});
+			response.render("translator", {portNumber:portNumber, username:currentUser, originalText : originalText, translation:translation});
 		})
 		.catch(err =>{ console.error(err)
-			response.render("translator", {portNumber:portNumber, username:currentUser, original:original, translation:translation});
+			response.render("translator", {portNumber:portNumber, username:currentUser, originalText : originalText, translation:translation});
 		});
 	} else {
-		response.render("translator", {portNumber:portNumber, username:currentUser, original:original, translation:translation});
+		response.render("translator", {portNumber:portNumber, username:currentUser, originalText : originalText, translation:translation});
 	}
 });
 
 app.post("/translate", async (request, response) => {
-	let {username, password, original} = request.body;
+	let {username, password, originalText} = request.body;
 	let currentUser = username || currentUser;
 	let translation = "";
 	// TODO: Make sure to clear the guest history
@@ -105,7 +108,7 @@ app.post("/translate", async (request, response) => {
 		const pass = await matchPassword(client, databaseAndCollection, currentUser, password);
 		if (pass) {
 			console.log("translate post")
-			response.render("translator", {portNumber:portNumber, username:currentUser, original:original, translation:translation});
+			response.render("translator", {portNumber:portNumber, username:currentUser, originalText:originalText, translation:translation});
 		} else {
 			response.render("loginFail");
 		}
@@ -151,7 +154,7 @@ async function makeTable(username){
 	result.history.forEach(elem => {
 		table += '<tr>';
 		table += `<td>${elem.lang1}</td>`;
-		table += `<td>${elem.original}</td>`;
+		table += `<td>${elem.originalText}</td>`;
 		table += `<td>${elem.lang2}</td>`;
 		table += `<td>${elem.translation}</td>`;
 		table += '</tr>';
