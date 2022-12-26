@@ -20,190 +20,191 @@ const username = process.env.MONGO_DB_USERNAME;
 const password = process.env.MONGO_DB_PASSWORD;
 const databaseAndCollection = {db: process.env.MONGO_DB_NAME, collection: process.env.MONGO_COLLECTION};
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const { connect } = require('http2');
 
 // Mongo DB credentials
 const uri = `mongodb+srv://${username}:${password}@cluster0.kp5wsfz.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
 // Start Mongo DB connection
-async function hi(){
+async function connect(){
 	try {
 		await client.connect();
+
+		// Routing section start
+		// When nothing is specified, display welcome.ejs
+		app.get("/", (request, response) => {
+			response.render("welcome", {portNumber : portNumber});
+		});
+
+		// Processes the actual translations
+		app.get("/translate", async (request, response) => {
+			let currentUser = request.query.username || "";
+			console.log(`Inserting ${currentUser} into database`);
+
+			let originalText = request.query.lang1Text || "";
+			let lang2Code = request.query.lang2Code || "";
+			let translatedText = "";
+
+			// Translate text
+			if (originalText !== ""){
+				const options = {
+					method: 'POST',
+					headers: {
+						'content-type': 'application/json',
+						'X-RapidAPI-Key': '42e2f88aa4msh9b9e63c519efcd4p1e7f5bjsn71acb1cbaca4',
+						'X-RapidAPI-Host': 'microsoft-translator-text.p.rapidapi.com'
+					},
+					body: `[{"Text":"${originalText}"}]`
+				};
+
+				console.log("executing translation")
+				
+				// Uses the fetch API to process translation through Microsoft Translate API
+				fetch(`https://microsoft-translator-text.p.rapidapi.com/translate?to%5B0%5D=${lang2Code}&api-version=3.0&profanityAction=NoAction&textType=plain`, options)
+				.then(response => response.json())
+				.then(async result => {
+					console.log(result)
+					let resultJSON = result[0];
+					translatedText = resultJSON.translations[0].text;
+			
+					let lang1Code = ""
+					let lang1 = ""
+					let lang2 = ""
+			
+					// Detects the language of the original text
+					const url = 'https://microsoft-translator-text.p.rapidapi.com/Detect?api-version=3.0';
+					await fetch(url, options)
+						.then(result => result.json())
+						.then(json => lang1Code = json[0].language)
+						.catch(err => console.error('Error during translation:' + err));
+
+					
+					lang1 = await getLanaguage(lang1Code)
+					lang2 = await getLanaguage(lang2Code)
+			
+					console.log(`Original language: ${lang1Code}, ${lang1}`)
+					console.log(`Target language: ${lang2Code}, ${lang2}`)
+			
+					await insertTrans(client, databaseAndCollection, currentUser, {
+						lang1 : lang1, 
+						originalText : originalText, 
+						lang2 : lang2, 
+						translatedText: translatedText
+					});
+			
+					console.log(`Translated text: ${translatedText}`)
+
+					response.render("translator", {
+						portNumber : portNumber, 
+						username : currentUser, 
+						originalText : originalText, 
+						translatedText:translatedText
+					});
+				})
+				.catch(err =>{ console.error(err)
+					response.render("translator", {
+						portNumber : portNumber, 
+						username : currentUser, 
+						originalText : originalText, 
+						translatedText : translatedText
+					});
+				});
+			}
+			else {
+				response.render("translator", {
+					portNumber : portNumber, 
+					username : currentUser, 
+					originalText : originalText, 
+					translatedText:translatedText
+				});
+			}
+		});
+
+		app.post("/translate", async (request, response) => {
+			let {username, password, originalText} = request.body;
+			let currentUser = username || currentUser;
+			let translatedText = "";
+			// TODO: Make sure to clear the guest history
+			console.log(currentUser);
+			if(currentUser === "guest"){
+				await clearGuestHistory(client, databaseAndCollection);
+			}
+			const result = await lookupUser(client, databaseAndCollection, currentUser);
+			if (result){
+				const pass = await matchPassword(client, databaseAndCollection, currentUser, password);
+				if (pass) {
+					console.log("translate post")
+					response.render("translator", {portNumber:portNumber, username:currentUser, originalText:originalText, translatedText:translatedText});
+				} else {
+					response.render("loginFail");
+				}
+			} else {
+				response.render("signup", {portNumber:portNumber});
+			}
+		});
+
+		app.get("/signup", (request, response) => {
+			response.render("signup", {portNumber:portNumber});
+		});
+
+		app.post("/signup", async (request, response) => {
+			let {username, password} = request.body;
+			console.log("signing up")
+			/*
+			TODO: search database if username already exists, 
+			*/
+			// Search database to check if username already exists
+			const result = await lookupUser(client, databaseAndCollection, username);
+			if(result != null){
+				response.render("signupFail", {username:username})
+			} else {
+				// add the user to the database
+				const user = {
+					username:username,
+					password:password,
+					history:[]
+				}
+				await insertUser(client, databaseAndCollection, user);
+				response.render("signupConfirm", {username:username, password: password});
+			}
+		});
+
+		// Creates a table from a users previous translations and send them in for the get
+		async function makeTable(username){
+			console.log("username:" + username);
+			table = ""
+			// create the table here
+			// There will always be a user (Guest or an actual one)
+			const result = await lookupUser(client, databaseAndCollection, username);
+			console.log(result);
+			result.history.forEach(elem => {
+				table += '<tr>';
+				table += `<td>${elem.lang1}</td>`;
+				table += `<td>${elem.originalText}</td>`;
+				table += `<td>${elem.lang2}</td>`;
+				table += `<td>${elem.translatedText}</td>`;
+				table += '</tr>';
+			})
+			return table;
+		}
+
+		app.get("/log", async (request, response)=>{
+			const username = request.query.username;
+			
+			table = await makeTable(username);
+			response.render("log", {portNumber:portNumber, table:table, username:username});
+		});
+
+		app.listen(portNumber);
+
 	} catch(e) {
 		console.log(e);
 	}}
 
-hi();
+connect();
 
-// Routing section start
-// When nothing is specified, display welcome.ejs
-app.get("/", (request, response) => {
-	response.render("welcome", {portNumber : portNumber});
-});
-
-// Processes the actual translations
-app.get("/translate", async (request, response) => {
-	let currentUser = request.query.username || "";
-	console.log(`Inserting ${currentUser} into database`);
-
-	let originalText = request.query.lang1Text || "";
-	let lang2Code = request.query.lang2Code || "";
-	let translatedText = "";
-
-	// Translate text
-	if (originalText !== ""){
-		const options = {
-			method: 'POST',
-			headers: {
-				'content-type': 'application/json',
-				'X-RapidAPI-Key': '42e2f88aa4msh9b9e63c519efcd4p1e7f5bjsn71acb1cbaca4',
-				'X-RapidAPI-Host': 'microsoft-translator-text.p.rapidapi.com'
-			},
-			body: `[{"Text":"${originalText}"}]`
-		};
-
-		console.log("executing translation")
-		
-		// Uses the fetch API to process translation through Microsoft Translate API
-		fetch(`https://microsoft-translator-text.p.rapidapi.com/translate?to%5B0%5D=${lang2Code}&api-version=3.0&profanityAction=NoAction&textType=plain`, options)
-		.then(response => response.json())
-		.then(async result => {
-			console.log(result)
-			let resultJSON = result[0];
-			translatedText = resultJSON.translations[0].text;
-	
-			let lang1Code = ""
-			let lang1 = ""
-			let lang2 = ""
-	
-			// Detects the language of the original text
-			const url = 'https://microsoft-translator-text.p.rapidapi.com/Detect?api-version=3.0';
-			await fetch(url, options)
-				.then(result => result.json())
-				.then(json => lang1Code = json[0].language)
-				.catch(err => console.error('Error during translation:' + err));
-
-			
-			lang1 = await getLanaguage(lang1Code)
-			lang2 = await getLanaguage(lang2Code)
-	
-			console.log(`Original language: ${lang1Code}, ${lang1}`)
-			console.log(`Target language: ${lang2Code}, ${lang2}`)
-	
-			await insertTrans(client, databaseAndCollection, currentUser, {
-				lang1 : lang1, 
-				originalText : originalText, 
-				lang2 : lang2, 
-				translatedText: translatedText
-			});
-	
-			console.log(`Translated text: ${translatedText}`)
-
-			response.render("translator", {
-				portNumber : portNumber, 
-				username : currentUser, 
-				originalText : originalText, 
-				translatedText:translatedText
-			});
-		})
-		.catch(err =>{ console.error(err)
-			response.render("translator", {
-				portNumber : portNumber, 
-				username : currentUser, 
-				originalText : originalText, 
-				translatedText : translatedText
-			});
-		});
-	}
-	else {
-		response.render("translator", {
-			portNumber : portNumber, 
-			username : currentUser, 
-			originalText : originalText, 
-			translatedText:translatedText
-		});
-	}
-});
-
-app.post("/translate", async (request, response) => {
-	let {username, password, originalText} = request.body;
-	let currentUser = username || currentUser;
-	let translatedText = "";
-	// TODO: Make sure to clear the guest history
-	console.log(currentUser);
-	if(currentUser === "guest"){
-		await clearGuestHistory(client, databaseAndCollection);
-	}
-	const result = await lookupUser(client, databaseAndCollection, currentUser);
-	if (result){
-		const pass = await matchPassword(client, databaseAndCollection, currentUser, password);
-		if (pass) {
-			console.log("translate post")
-			response.render("translator", {portNumber:portNumber, username:currentUser, originalText:originalText, translatedText:translatedText});
-		} else {
-			response.render("loginFail");
-		}
-	} else {
-		response.render("signup", {portNumber:portNumber});
-	}
-});
-
-app.get("/signup", (request, response) => {
-	response.render("signup", {portNumber:portNumber});
-});
-
-app.post("/signup", async (request, response) => {
-	let {username, password} = request.body;
-	console.log("signing up")
-	/*
-	TODO: search database if username already exists, 
-	*/
-	// Search database to check if username already exists
-	const result = await lookupUser(client, databaseAndCollection, username);
-	if(result != null){
-		response.render("signupFail", {username:username})
-	} else {
-		// add the user to the database
-		const user = {
-			username:username,
-			password:password,
-			history:[]
-		}
-		await insertUser(client, databaseAndCollection, user);
-		response.render("signupConfirm", {username:username, password: password});
-	}
-});
-
-// Creates a table from a users previous translations and send them in for the get
-async function makeTable(username){
-	console.log("username:" + username);
-	table = ""
-	// create the table here
-	// There will always be a user (Guest or an actual one)
-	const result = await lookupUser(client, databaseAndCollection, username);
-	console.log(result);
-	result.history.forEach(elem => {
-		table += '<tr>';
-		table += `<td>${elem.lang1}</td>`;
-		table += `<td>${elem.originalText}</td>`;
-		table += `<td>${elem.lang2}</td>`;
-		table += `<td>${elem.translatedText}</td>`;
-		table += '</tr>';
-	})
-	return table;
-}
-
-app.get("/log", async (request, response)=>{
-	const username = request.query.username;
-	
-	table = await makeTable(username);
-	response.render("log", {portNumber:portNumber, table:table, username:username});
-});
-
-app.listen(portNumber);
-
-//routing section end
-
+// routing section end
 // MongoDB section start
 
 // Checks to see if the username exits in the database
