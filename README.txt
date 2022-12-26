@@ -1,4 +1,4 @@
-﻿Translator App (insert url here once hosted)
+﻿Translator App ttps://finalcmsc355.onrender.com
 
 Team Members:
 Jonathan Ortiz (jaortiz9), Bao Ngo (bngo16), Anthony Tu (atu), Rohan Bhattarai (rbhatt87)
@@ -12,5 +12,3 @@ API Link:
 Microsoft Translator Text API (https://rapidapi.com/microsoft-azure-org-microsoft-cognitive-services/api/microsoft-translator-text/)
 
 YouTube Demo Video: https://www.youtube.com/watch?v=uJFyizbNPkU
-
-website: https://finalcmsc355.onrender.com
