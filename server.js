@@ -27,7 +27,7 @@ const uri = `mongodb+srv://${username}:${password}@cluster0.kp5wsfz.mongodb.net/
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
 // Start Mongo DB connection
-async function connect(){
+async function startApp(){
 	try {
 		await client.connect();
 
@@ -84,6 +84,7 @@ async function connect(){
 					lang2 = await getLanaguage(lang2Code)
 			
 					console.log(`Original language: ${lang1Code}, ${lang1}`)
+					console.log(`Original text: ${originalText}`)
 					console.log(`Target language: ${lang2Code}, ${lang2}`)
 			
 					await insertTrans(client, databaseAndCollection, currentUser, {
@@ -202,7 +203,7 @@ async function connect(){
 		console.log(e);
 	}}
 
-connect();
+startApp();
 
 // routing section end
 // MongoDB section start
