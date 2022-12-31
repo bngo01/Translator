@@ -1,9 +1,7 @@
 const fetch = require('node-fetch');
-const http = require("http");
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, 'credentials/.env') })
 const bodyParser = require("body-parser");
-// const fs = require("fs");
 const express = require("express");
 const app = express();
 
@@ -14,6 +12,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 process.stdin.setEncoding("utf8");
 const portNumber = process.env.PORT || 5000;
 console.log(`Visit http://localhost:${portNumber}`);
+console.log(`Press Ctrl+C to terminate application`)
 
 // MongoDB imports 
 const username = process.env.MONGO_DB_USERNAME;
@@ -30,6 +29,16 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 async function startApp(){
 	try {
 		await client.connect();
+
+		// Upon connecting, check if guest user already exists
+		// If not, create it
+		if (await lookupUser(client, databaseAndCollection, "guest")){
+			console.log(`guest user already exists`)
+		}
+		else {
+			// Create guest user for Log In As Guest once when connecting to MongoDB
+			await createGuest(client, databaseAndCollection);
+		}
 
 		// Routing section start
 		// When nothing is specified, display welcome.ejs
@@ -79,18 +88,20 @@ async function startApp(){
 						.then(json => lang1Code = json[0].language)
 						.catch(err => console.error('Error during translation:' + err));
 
-					
+					// Get language based on language code
 					lang1 = await getLanaguage(lang1Code)
 					lang2 = await getLanaguage(lang2Code)
 			
 					console.log(`Original language: ${lang1Code}, ${lang1}`)
 					console.log(`Original text: ${originalText}`)
 					console.log(`Target language: ${lang2Code}, ${lang2}`)
-			
+				// })
+				// .then(async lang1 => {
+					// Insert translation into MongoDB
 					await insertTrans(client, databaseAndCollection, currentUser, {
-						lang1 : lang1, 
+						originalLanguage : lang1, 
 						originalText : originalText, 
-						lang2 : lang2, 
+						targetLanguage : lang2, 
 						translatedText: translatedText
 					});
 			
@@ -152,9 +163,7 @@ async function startApp(){
 		app.post("/signup", async (request, response) => {
 			let {username, password} = request.body;
 			console.log("signing up")
-			/*
-			TODO: search database if username already exists, 
-			*/
+
 			// Search database to check if username already exists
 			const result = await lookupUser(client, databaseAndCollection, username);
 			if(result != null){
@@ -181,16 +190,16 @@ async function startApp(){
 			console.log(result);
 			result.history.forEach(elem => {
 				table += '<tr>';
-				table += `<td>${elem.lang1}</td>`;
+				table += `<td>${elem.originalLanguage}</td>`;
 				table += `<td>${elem.originalText}</td>`;
-				table += `<td>${elem.lang2}</td>`;
+				table += `<td>${elem.targetLanguage}</td>`;
 				table += `<td>${elem.translatedText}</td>`;
 				table += '</tr>';
 			})
 			return table;
 		}
 
-		app.get("/log", async (request, response)=>{
+		app.get("/log", async (request, response) => {
 			const username = request.query.username;
 			
 			table = await makeTable(username);
@@ -210,8 +219,7 @@ startApp();
 
 // Checks to see if the username exits in the database
 async function lookupUser(client, databaseAndCollection, username){
-	const result = await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).findOne({username: username});
-	return result;
+	return await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).findOne({username : username});
 }
 
 // Inserts the username and password into the database
@@ -219,9 +227,22 @@ async function insertUser(client, databaseAndCollection, user){
 	await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).insertOne(user);
 }
 
+// Create guest user with password
+async function createGuest(client, databaseAndCollection){
+	let guestUser = {
+		username : "guest",
+		password : "password",
+		history : []
+	}
+
+	await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).insertOne(guestUser);
+}
+
 // Add new translations into the history of the user
 async function insertTrans(client, databaseAndCollection, username, historyTuple){
-	await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).updateOne({username: username}, {$push: {history: historyTuple}});
+	await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).updateOne(
+		{username: username}, 
+		{$push: {history: historyTuple}});
 }
 
 // Clear the guest history 
@@ -231,8 +252,7 @@ async function clearGuestHistory(client, databaseAndCollection){
 
 // Check if the password matches
 async function matchPassword(client, databaseAndCollection, username, password){
-	const result = await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).findOne({username: username, password: password});
-	return result;
+	return await client.db(databaseAndCollection.db).collection(databaseAndCollection.collection).findOne({username: username, password: password});
 }
 
 // MongtoDB section end

@@ -7,13 +7,13 @@ body {
     transform: translate(-50%, -50%);
     position: absolute;
     padding: 2em;
-    height: 38em;
+    height: 40em;
     width: 25em;
 }
 
 #scrollbar {
     width: 25em; 
     height: 30em; 
-    line-height: 1em; 
-    overflow: scroll;
+    line-height: 1em;
+    overflow: auto; 
 }
