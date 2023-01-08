@@ -1,4 +1,4 @@
-﻿Translator App https://finalcmsc355.onrender.com
+﻿Translator App https://cmsc335-final-translator.onrender.com/
 
 Team Members:
 Jonathan Ortiz (jaortiz9), Bao Ngo (bngo16), Anthony Tu (atu), Rohan Bhattarai (rbhatt87)
