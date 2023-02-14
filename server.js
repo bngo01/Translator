@@ -61,7 +61,7 @@ async function startApp(){
 					method: 'POST',
 					headers: {
 						'content-type': 'application/json',
-						'X-RapidAPI-Key': '42e2f88aa4msh9b9e63c519efcd4p1e7f5bjsn71acb1cbaca4',
+						'X-RapidAPI-Key': '4c4687ea45msh5db34c096b9c23ep104397jsnaead415edfd3',
 						'X-RapidAPI-Host': 'microsoft-translator-text.p.rapidapi.com'
 					},
 					body: `[{"Text":"${originalText}"}]`
